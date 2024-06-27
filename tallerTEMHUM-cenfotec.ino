@@ -17,17 +17,21 @@ DHT dht(DHTPIN, DHTTYPE);
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 
+// Pines I2C para ESP32
+#define OLED_SDA 21  // Pin SDA
+#define OLED_SCL 22  // Pin SCL
+
 // Crear objeto de la pantalla OLED
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 // Configuración de red WiFi
-const char* ssid = "Nexxt";
-const char* password = "vacaloca";
+const char* ssid = "RED WIFI";
+const char* password = "PASSWORD";
 
 // Configuración de MQTT
-const char* mqtt_server = "3.233.176.250";
-const char* mqtt_user = "esp32";
-const char* mqtt_password = "";
+const char* mqtt_server = "IP-SERVER";
+const char* mqtt_user = "USER";
+const char* mqtt_password = "PASSWORD";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -50,6 +54,9 @@ const char* relay2_control_topic = "sensor1/relay2/control";
 const int ledPin = 2;
 const int relay1Pin = 25;
 const int relay2Pin = 26;
+
+bool relay1State = false; // Estado del relé 1
+bool relay2State = false; // Estado del relé 2
 
 void setup_wifi() {
   delay(10);
@@ -99,9 +106,11 @@ void callback(char* topic, byte* payload, unsigned int length) {
     if (messageTemp == "ON") {
       digitalWrite(relay1Pin, LOW); // LOW enciende el relé en algunos módulos
       client.publish(relay1_status_topic, "ON");
+      relay1State = true;
     } else if (messageTemp == "OFF") {
       digitalWrite(relay1Pin, HIGH); // HIGH apaga el relé en algunos módulos
       client.publish(relay1_status_topic, "OFF");
+      relay1State = false;
     }
   }
 
@@ -110,10 +119,11 @@ void callback(char* topic, byte* payload, unsigned int length) {
     if (messageTemp == "ON") {
       digitalWrite(relay2Pin, LOW); // LOW enciende el relé en algunos módulos
       client.publish(relay2_status_topic, "ON");
-      delay (1000);
+      relay2State = true;
+      delay (3000);
       digitalWrite(relay2Pin, HIGH); // HIGH apaga el relé en algunos módulos
       client.publish(relay2_status_topic, "OFF");
-    
+      relay2State = false;
     }
   }
 }
@@ -153,6 +163,9 @@ void setup() {
   // Iniciar el sensor DHT
   dht.begin();
   
+  // Configurar los pines I2C
+  Wire.begin(OLED_SDA, OLED_SCL);
+
   // Iniciar la pantalla OLED
   if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
     Serial.println(F("Fallo en la asignación de SSD1306"));
@@ -182,7 +195,7 @@ void loop() {
   client.loop();
 
   long now = millis();
-  if (now - lastMsg > 2000) {
+  if (now - lastMsg > 5000) {
     lastMsg = now;
 
     // Leer la temperatura y humedad del sensor
@@ -223,6 +236,26 @@ void loop() {
     display.print(F("Temp: "));
     display.print(t);
     display.println(F(" C"));
+
+    // Mostrar estado de relé 1 (Bombillo encendido/apagado)
+    display.setCursor(0, 40);
+    if (relay1State) {
+      display.println(F("Relay 1: ON"));
+      display.fillCircle(100, 50, 5, SSD1306_WHITE); // Bombillo encendido
+    } else {
+      display.println(F("Relay 1: OFF"));
+      display.drawCircle(100, 50, 5, SSD1306_WHITE); // Bombillo apagado
+    }
+
+    // Mostrar estado de relé 2 (Figura de alerta)
+    display.setCursor(0, 50);
+    if (relay2State) {
+      display.println(F("Relay 2: ON"));
+      display.fillTriangle(110, 50, 115, 40, 120, 50, SSD1306_WHITE); // Triángulo de alerta
+    } else {
+      display.println(F("Relay 2: OFF"));
+      display.drawTriangle(110, 50, 115, 40, 120, 50, SSD1306_WHITE); // Triángulo de alerta vacío
+    }
 
     display.display();
   }
